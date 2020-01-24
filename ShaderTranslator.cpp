@@ -1,5 +1,5 @@
 //==============================================================================
-// xxImGui : Plugin ShaderTranslator Source
+// ShaderTranslator
 //
 // Copyright (c) 2019 TAiGA
 // https://github.com/metarutaiga/xxImGui
@@ -15,12 +15,13 @@
 //------------------------------------------------------------------------------
 pluginAPI const char* Create(const CreateData& createData)
 {
+    ShaderPanelInitialize(createData.baseFolder);
     return PLUGIN_NAME;
 }
 //------------------------------------------------------------------------------
 pluginAPI void Shutdown(const ShutdownData& shutdownData)
 {
-
+    ShaderPanelShutdown();
 }
 //------------------------------------------------------------------------------
 pluginAPI void Update(const UpdateData& updateData)

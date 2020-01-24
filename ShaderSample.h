@@ -6,8 +6,7 @@
 //==============================================================================
 #pragma once
 
-#include <interface.h>
-
-void ShaderPanelInitialize(const char* folder);
-void ShaderPanelShutdown();
-void ShaderPanel(const UpdateData& updateData, bool& show);
+extern const char* const sampleHLSLVertexShaderLegacy;
+extern const char* const sampleHLSLVertexShader;
+extern const char* const sampleHLSLPixelShaderLegacy;
+extern const char* const sampleHLSLPixelShader;

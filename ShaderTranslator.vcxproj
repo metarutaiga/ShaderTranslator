@@ -162,6 +162,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="ShaderPanel.cpp" />
+    <ClCompile Include="ShaderSample.cpp" />
     <ClCompile Include="ShaderTranslator.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -171,12 +172,10 @@
     <ProjectReference Include="..\..\build\xxGraphic.vcxproj">
       <Project>{81c889fc-6908-4066-8c73-3215df6fffc9}</Project>
     </ProjectReference>
-    <ProjectReference Include="..\..\build\xxMiniCRT.vcxproj">
-      <Project>{1e136574-0e51-4a54-bb25-0c0ec04a2ac3}</Project>
-    </ProjectReference>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ShaderPanel.h" />
+    <ClInclude Include="ShaderSample.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
