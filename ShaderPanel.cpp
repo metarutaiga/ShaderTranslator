@@ -25,11 +25,12 @@ struct ExternalCompiler
     const char* sample;
     std::string compile;
     std::string disassemble;
+    std::string temp;
 };
 
-static std::string folder;
-static std::vector<ExternalCompiler> externalCompilers;
-static char version[32];
+static std::string* folder;
+static std::vector<ExternalCompiler>* externalCompilers;
+static char profile[32];
 static char source[65536];
 static char target[65536];
 static char logger[256];
@@ -37,6 +38,9 @@ static char logger[256];
 //------------------------------------------------------------------------------
 void ShaderPanelInitialize(const char* folder)
 {
+    ::folder = new std::string;
+    ::externalCompilers = new std::vector<ExternalCompiler>;
+
     char filename[MAX_PATH];
     snprintf(filename, MAX_PATH, "%s/tools/ExternalShaderCompiler.ini", folder);
 
@@ -53,6 +57,10 @@ void ShaderPanelInitialize(const char* folder)
             char* sample = strtok(nullptr, ",");
             char* compile = strtok(nullptr, ",");
             char* disassemble = strtok(nullptr, ",");
+            char* temp = strtok(nullptr, ",");
+
+            if (temp == nullptr)
+                continue;
 
             ExternalCompiler externalCompiler;
             externalCompiler.profile = profile ? profile : "";
@@ -65,19 +73,21 @@ void ShaderPanelInitialize(const char* folder)
             }
             externalCompiler.compile = compile ? compile : "";
             externalCompiler.disassemble = disassemble ? disassemble : "";
-            externalCompilers.emplace_back(externalCompiler);
+            externalCompiler.temp = temp ? temp : "";
+            (*::externalCompilers).emplace_back(externalCompiler);
         }
 
         fclose(file);
     }
 
     snprintf(filename, MAX_PATH, "%s/tools", folder);
-    ::folder = filename;
+    (*::folder) = filename;
 }
 //------------------------------------------------------------------------------
 void ShaderPanelShutdown()
 {
-    externalCompilers.clear();
+    delete folder;
+    delete externalCompilers;
 }
 //------------------------------------------------------------------------------
 static void HLSLCompile()
@@ -89,7 +99,7 @@ static void HLSLCompile()
     ID3DBlob* compiled = nullptr;
     ID3DBlob* error = nullptr;
     float time = xxGetCurrentTime();
-    D3DCompile(source, strlen(source), nullptr, nullptr, nullptr, "main", version, 0, 0, &compiled, &error);
+    D3DCompile(source, strlen(source), nullptr, nullptr, nullptr, "main", profile, 0, 0, &compiled, &error);
     time = xxGetCurrentTime() - time;
     if (compiled)
     {
@@ -125,20 +135,21 @@ static void HLSLCompile()
 static void ExternalCompile(const ExternalCompiler& compiler)
 {
     char temp[MAX_PATH];
+    const char* const folder = (*::folder).c_str();
     STARTUPINFOA si = { sizeof(si) };
     PROCESS_INFORMATION pi = {};
     FILE* file = nullptr;
 
     xxLocalBreak()
     {
-        snprintf(temp, MAX_PATH, "%s/temp.txt", folder.c_str());
+        snprintf(temp, MAX_PATH, "%s/temp.txt", folder);
         file = fopen(temp, "w");
         if (file == nullptr)
             break;
         fwrite(source, 1, strlen(source), file);
         fclose(file);
 
-        snprintf(temp, MAX_PATH, compiler.compile.c_str(), folder.c_str(), folder.c_str(), folder.c_str());
+        snprintf(temp, MAX_PATH, compiler.compile.c_str(), folder, folder, folder);
         float time = xxGetCurrentTime();
         if (CreateProcessA(nullptr, temp, nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi) == FALSE)
             break;
@@ -148,7 +159,7 @@ static void ExternalCompile(const ExternalCompiler& compiler)
         CloseHandle(pi.hProcess);
         CloseHandle(pi.hThread);
 
-        snprintf(temp, MAX_PATH, compiler.disassemble.c_str(), folder.c_str(), folder.c_str(), folder.c_str());
+        snprintf(temp, MAX_PATH, compiler.disassemble.c_str(), folder, folder, folder);
         if (CreateProcessA(nullptr, temp, nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi) == FALSE)
             break;
 
@@ -156,7 +167,7 @@ static void ExternalCompile(const ExternalCompiler& compiler)
         CloseHandle(pi.hProcess);
         CloseHandle(pi.hThread);
 
-        snprintf(temp, MAX_PATH, "%s/temp.txt", folder.c_str());
+        snprintf(temp, MAX_PATH, compiler.temp.c_str(), folder);
         file = fopen(temp, "r");
         if (file == nullptr)
             break;
@@ -167,18 +178,21 @@ static void ExternalCompile(const ExternalCompiler& compiler)
         snprintf(logger, sizeof(logger), "Compile time : %.2f ms", time * 1000.0f);
     }
 
-    snprintf(temp, MAX_PATH, "%s/temp.txt", folder.c_str());
+    snprintf(temp, MAX_PATH, "%s/temp.txt", folder);
     remove(temp);
-    snprintf(temp, MAX_PATH, "%s/temp.bin", folder.c_str());
+    snprintf(temp, MAX_PATH, "%s/temp.bin", folder);
+    remove(temp);
+    snprintf(temp, MAX_PATH, compiler.temp.c_str(), folder);
     remove(temp);
 }
 //------------------------------------------------------------------------------
 void ShaderPanel(const UpdateData& updateData, bool& show)
 {
-    ImGui::SetNextWindowSize(ImVec2(1200 * updateData.windowScale, 600 * updateData.windowScale), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(1200.0f * updateData.windowScale, 600.0f * updateData.windowScale), ImGuiCond_FirstUseEver);
     if (ImGui::Begin("Shader Panel", &show))
     {
         ImVec2 windowSize = ImGui::GetWindowSize();
+        float windowBorder = ImGui::GetStyle().WindowPadding.x * 2.0f;
         bool hlslCompile = false;
         ExternalCompiler* externalCompiler = nullptr;
 
@@ -199,27 +213,31 @@ void ShaderPanel(const UpdateData& updateData, bool& show)
         {
             if (ImGui::Button(hlsl[i].version))
             {
-                snprintf(version, sizeof(version), hlsl[i].version);
-                snprintf(source, sizeof(source), "%s", hlsl[i].code);
+                strcpy(profile, hlsl[i].version);
+                strcpy(source, hlsl[i].code);
                 hlslCompile = true;
             }
             ImGui::SameLine();
         }
+        ImGui::NewLine();
 
         // External Compiler
-        for (size_t i = 0; i < externalCompilers.size(); ++i)
+        for (size_t i = 0; i < (*externalCompilers).size(); ++i)
         {
-            if (ImGui::Button(externalCompilers[i].profile.c_str()))
+            if (ImGui::GetCursorPosX() >= windowSize.x - ImGui::CalcTextSize((*externalCompilers)[i].profile.c_str()).x - windowBorder)
+                ImGui::NewLine();
+
+            if (ImGui::Button((*externalCompilers)[i].profile.c_str()))
             {
-                snprintf(version, sizeof(version), externalCompilers[i].profile.c_str());
-                snprintf(source, sizeof(source), "%s", externalCompilers[i].sample);
-                externalCompiler = &externalCompilers[i];
+                strcpy(profile, (*externalCompilers)[i].profile.c_str());
+                strcpy(source, (*externalCompilers)[i].sample);
+                externalCompiler = &(*externalCompilers)[i];
             }
             ImGui::SameLine();
         }
-
         ImGui::NewLine();
-        if (ImGui::InputTextMultiline("##source", source, IM_ARRAYSIZE(source), ImVec2(windowSize.x / 2.0f, ImGui::GetTextLineHeight() * 36)))
+
+        if (ImGui::InputTextMultiline("##source", source, IM_ARRAYSIZE(source), ImVec2(windowSize.x / 2.0f, ImGui::GetTextLineHeight() * 36.0f)))
         {
             hlslCompile = true;
         }
@@ -235,7 +253,7 @@ void ShaderPanel(const UpdateData& updateData, bool& show)
         }
 
         ImGui::SameLine();
-        ImGui::InputTextMultiline("##target", target, IM_ARRAYSIZE(target), ImVec2(windowSize.x / 2.0f, ImGui::GetTextLineHeight() * 36), ImGuiInputTextFlags_ReadOnly);
+        ImGui::InputTextMultiline("##target", target, IM_ARRAYSIZE(target), ImVec2(windowSize.x / 2.0f, ImGui::GetTextLineHeight() * 36.0f), ImGuiInputTextFlags_ReadOnly);
         ImGui::TextUnformatted(logger);
         ImGui::End();
     }
